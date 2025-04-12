@@ -1,0 +1,66 @@
+FROM python:3.8-slim
+WORKDIR /app
+RUN groupadd --gid 10001 app && useradd -g app --uid 10001 --shell /usr/sbin/nologin app
+RUN chown app:app /tmp
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    gcc apt-transport-https python-dev \
+    build-essential libpq-dev
+
+
+COPY ./backend/django/requirements.txt /app/backend/django/requirements.txt
+RUN pip install --upgrade --no-cache-dir -r backend/django/requirements.txt
+
+COPY . /app
+# RUN chmod +x /app/backend/startup.sh
+RUN python /app/backend/django/manage.py makemigrations &&\
+    python /app/backend/django/manage.py migrate &&\
+    python /app/backend/django/manage.py shell < /app/backend/django/init_admin.py
+
+
+
+
+
+CMD python backend/django/manage.py runserver 0.0.0.0:$PORT
+
+
+
+
+
+
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.7
+WORKDIR /app/
+
+# COPY ./requirements.txt /app/requirements.txt
+# RUN pip install --upgrade --no-cache-dir -r /app/requirements.txt
+
+# Install Poetry
+RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | POETRY_HOME=/opt/poetry python && \
+    cd /usr/local/bin && \
+    ln -s /opt/poetry/bin/poetry && \
+    poetry config virtualenvs.create false
+
+# Copy poetry.lock* in case it doesn't exist in the repo
+COPY ./pyproject.toml ./poetry.lock* /app/
+
+# Allow installing dev dependencies to run tests
+ARG INSTALL_DEV=false
+RUN bash -c "if [ $INSTALL_DEV == 'true' ] ; then poetry install --no-root ; else poetry install --no-root --no-dev ; fi"
+
+COPY . /app
+
+# RUN chmod +x /app/prestartup.sh
+RUN python /app/backend_pre_start.py &&\
+    alembic upgrade head &&\
+    python /app/initial_data.py
+
+ENV PYTHONPATH=/app
+
+USER app # ??
+
+ENV PORT=8000
+EXPOSE $PORT
+
+# CMD uvicorn app.main:app --reload --host=0.0.0.0 --port=$PORT
+# CMD gunicorn --workers 4 --bind 0.0.0.0:$PORT -k uvicorn.workers.UvicornWorker --reload app.main:app

@@ -1,0 +1,9 @@
+from .files import router as files_router
+from .strategies import router as strategy_router
+from .trading_plans import router as trading_plan_router
+from .studies import router as study_router
+from .tasks import router as task_router
+from .styles import router as style_router
+from .instruments import router as instrument_router
+from .trades import router as trade_router
+from .statistics import router  as statistics_router
